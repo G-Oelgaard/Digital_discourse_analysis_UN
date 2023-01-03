@@ -1,5 +1,5 @@
 # Digital_discourse_analysis_UN
-Denne repository indeholder koden og bilag fra opgaven "Digital undersøgelse af geopolitiske blokke i FN’s generalforsamling, 1970-1991"
+Dette repository indeholder koden og bilag fra opgaven "Digital undersøgelse af geopolitiske blokke i FN’s generalforsamling, 1970-1991"
 
 ## Data
 Før koden fra repositortiet kan virke, kræver det at det relevante data bliver downloaded og placeret i den korrekte "data" mappe.
