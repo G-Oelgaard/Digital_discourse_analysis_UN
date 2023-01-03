@@ -9,4 +9,4 @@ Download link:
 - En opdateret version af dataen kan findes her: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/0TJX8Y
 
 ## Bilag
-- De tilhørende bilag kan findes i "Billeder" mappen og er navngivet efter deres placering i opgavens bilag.
+De tilhørende bilag kan findes i "Billeder" mappen og er navngivet efter deres placering i opgavens bilag.
