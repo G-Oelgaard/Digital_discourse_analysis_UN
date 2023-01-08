@@ -1,0 +1,265 @@
+---
+title: "Wordfish United Nations"
+author: "Gustav Ølgaard"
+date: "12/8/2022"
+output: html_document
+---
+
+```{r}
+#install.packages("quanteda")
+#install.packages("quanteda.textmodels")
+#install.packages("quanteda.textstats")
+#install.packages("quanteda.textplots")
+
+library(quanteda)
+library(quanteda.textmodels)
+library(quanteda.textstats)
+library(quanteda.textplots)
+library(tidyverse)
+library(ggplot2)
+library(tidytext)
+```
+
+```{r}
+General <- read_csv("data/un-general-debates.csv")
+```
+
+```{r defining blocks}
+Eastblock <- c("RUS","DDR", "POL", "BGR", "HUN", "CSK", "MNG", "UKR", "BLR", "ROU", "YMD", "CUB", "LAO", "AFG", "VNM")
+Westblock <- c("USA", "GBR", "FRA", "DNK", "ITA", "DEU", "NLD", "BEL", "LUX", "TUR", "NOR", "GRC", "CYP", "PRT", "ISL", "CAN", "ESP", "AUS", "NZL", "JPN", "ISR", "ZAF")
+Soviet_east <- c("RUS","DDR", "POL", "BGR", "HUN", "CSK", "MNG", "UKR", "BLR")
+East_ally <- c("ROU", "YMD", "CUB", "LAO", "AFG", "VNM")
+West_power <- c("USA", "GBR", "FRA")
+West_euro <- c("DNK", "ITA", "DEU", "NLD", "BEL", "LUX", "TUR", "NOR", "GRC", "CYP", "PRT", "ISL", "ESP")
+West_ally <- c("AUS", "NZL", "JPN", "ISR", "ZAF", "CAN")
+```
+
+```{r removeing non-block countries}
+Blocks <- General %>% 
+  filter(year <= 1991) %>% 
+  filter(country %in% Eastblock | country %in% Westblock)
+
+Blocks_all <- General %>% 
+  filter(year <= 1991) %>% 
+  filter(country %in% Eastblock | country %in% Westblock | country %in% NAM)
+```
+
+```{r Assigning blocks}
+Blocks <- Blocks %>% 
+  mutate(block = ifelse(country %in% Eastblock, "East", "West"))
+
+Blocks <- Blocks %>% 
+  mutate(group = ifelse(country %in% Soviet_east, "East_Sovi", ifelse(country %in% East_ally, "East_ally", ifelse(country %in% West_power, "West_powr", ifelse(country %in% West_nato, "West_Nato", "West_ally")))))
+
+#Blocks_all <- Blocks_all %>% 
+  # mutate(block = ifelse(country %in% Eastblock, "East", ifelse(country %in% Westblock, "West", "NAM")))
+```
+
+```{r}
+Blocks$label <- paste0(Blocks$country,"_",Blocks$year,"_",Blocks$group)
+#Blocks_all$label <- paste0(Blocks_all$country,"_",Blocks_all$year)
+```
+
+```{r}
+write.csv(Blocks, "UN_blocs_EW.csv")
+```
+
+```{r unnesting tokens}
+Blocks_tidy <- Blocks %>% 
+  unnest_tokens(word, text)
+
+#Blocks_all_tidy <- Blocks_all %>% 
+  #unnest_tokens(word, text)
+```
+
+```{r}
+Blocks_tidy_tf_idf <- Blocks_tidy %>%
+  group_by(label, year, country) %>% 
+  count(word) %>%
+  bind_tf_idf(word, label, n) %>% # actually doing tf_idf
+  ungroup()
+
+#Blocks_all_tidy_tf_idf <- Blocks_all_tidy %>%
+  group_by(label, year, country) %>% 
+  count(word) %>%
+  bind_tf_idf(word, label, n) %>% # actually doing tf_idf
+  ungroup()
+```
+
+```{r}
+label_remove <- c("ESP_1981_West_Nato", "ESP_1980_West_Nato", "ESP_1979_West_Nato", "ESP_1978_West_Nato", "ESP_1977_West_Nato", "ESP_1976_West_Nato", "ESP_1975_West_Nato", "ESP_1974_West_Nato", "ESP_1973_West_Nato", "ESP_1972_West_Nato", "ESP_1971_West_Nato", "ESP_1970_West_Nato", "AFG_1977_East_ally", "AFG_1976_East_ally", "AFG_1975_East_ally", "AFG_1974_East_ally", "AFG_1973_East_ally", "AFG_1972_East_ally", "AFG_1971_East_ally", "AFG_1970_East_ally")
+```
+
+```{r}
+Blocks_tidy_tf_idf <- subset(Blocks_tidy_tf_idf, !(label %in% label_remove))
+```
+
+## Wordfish
+```{r}
+Blocks_tidy_dfm <- Blocks_tidy_tf_idf %>%
+  cast_dfm(label, word, n)
+
+#Blocks_all_tidy_dfm <- Blocks_all_tidy_tf_idf %>%
+  cast_dfm(label, word, n)
+```
+
+```{r}
+Blocks_tidy_dfm_stem <- dfm_wordstem(Blocks_tidy_dfm)
+
+#Blocks_all_dfm_stem <- dfm_wordstem(Blocks_all_tidy_dfm)
+```
+
+```{r}
+temp <- subset(Blocks, !(label %in% label_remove))
+temp <- temp[order(temp$label), ]
+which(temp$label == "GBR_1970_West_powr")
+which(temp$label == "RUS_1971_East_Sovi")
+
+```
+
+```{r}
+#wf <- textmodel_wordfish(Blocks_tidy_dfm, dir = c(462, 505), dispersion = "poisson")
+wf_stem <- textmodel_wordfish(Blocks_tidy_dfm_stem, dir = c(615, 276), dispersion = "poisson", sparse = T)
+#wf_stem_all <- textmodel_wordfish(Blocks_all_dfm_stem, dir = c(1243, 1587), dispersion = "poisson")
+```
+
+```{r}
+wfdata <- as.data.frame(predict(wf, interval = "confidence"))
+wfstemdata <- as.data.frame(predict(wf_stem, interval = "confidence"))
+#wfstemall <- as.data.frame(predict(wf_stem_all, interval = "confidence"))
+```
+
+```{r}
+write.csv(wfdata, "\\data\\wordfish_data.csv", row.names=FALSE)
+wfdata$docs <- rownames(wfdata)
+wfdata$year <- as.numeric(substr(wfdata$docs, 5, 8))
+wfdata$country <- as.factor(substr(wfdata$docs, 1, 3))
+wfdata$group <- as.factor(substr(wfdata$docs, 10, 18))
+wfdata <- wfdata %>% 
+  mutate(block = ifelse(country %in% Eastblock, "East", "West"))
+```
+
+```{r}
+write.csv(wfstemdata, "\\data\\wordfish_stem_data.csv", row.names=FALSE)
+wfstemdata$docs <- rownames(wfstemdata)
+wfstemdata$year <- as.numeric(substr(wfstemdata$docs, 5, 8))
+wfstemdata$country <- as.factor(substr(wfstemdata$docs, 1, 3))
+wfstemdata$group <- as.factor(substr(wfstemdata$docs, 10, 18))
+wfstemdata <- wfstemdata %>% 
+  mutate(block = ifelse(country %in% Eastblock, "East", "West"))
+```
+
+```{r}
+#write.csv(wfstemall, "\\data\\wordfish_stem_all_data.csv", row.names=FALSE)
+#wfstemall$docs <- rownames(wfstemall)
+#wfstemall$year <- as.numeric(substr(wfstemall$docs, 5, 8))
+#wfstemall$country <- as.factor(substr(wfstemall$docs, 1, 3))
+#wfstemall <- wfstemall %>% 
+  mutate(block = ifelse(country %in% Eastblock, "East", ifelse(country %in% Westblock, "West", "NAM")))
+```
+
+
+# Uden stemmed data
+```{r}
+p <- ggplot(wfdata) +
+  geom_pointrange(
+    aes(x = year, y = fit.fit, ymin = fit.lwr, ymax = fit.upr, group = country, color = block,), size = 0.5) +
+  geom_line(aes(x = year, y = fit.fit, group = country, color = block)) +
+  geom_vline(xintercept=1989, linetype="dashed") +
+  annotate("text", x=1990, y=-1.5, label="Muren falder", size=2) + 
+  geom_vline(xintercept=1985, linetype="dotted") +
+  annotate("text", x=1983.5, y=-2.3, label= "Gorbachev får magten", size=2) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = .5, hjust=.5)) +
+  labs(title = "Wordfish analysis",
+       y = "Speech position",
+       x = "Year") +
+  scale_x_continuous("Year", labels = wfdata$year, breaks = wfdata$year)
+
+p
+
+ggsave("Billeder/Wordfish_blocks.jpg",height=5,width=10)
+```
+
+```{r}
+textplot_scale1d(wf, groups = wfdata$block)
+```
+
+```{r}
+png(file="Billeder/Wordfish_doc_theta.png",
+width=1000, height=4000, res=100)
+textplot_scale1d(wf, groups = wfdata$block)
+dev.off()
+```
+
+```{r}
+textplot_scale1d(wf, margin = "features", 
+                 highlighted = c("government", "communist", "disarmerment", "nuclear", "war", "weapons", "europe", "america", "africa", "asia", "worker", "rights", "human", "imperialists", "revolutionary", "counterrevolutionary"))
+```
+# Med stemmed data
+```{r}
+p <- ggplot(wfstemdata) +
+  geom_line(aes(x = year, y = fit.fit, group = country, color = group)) +
+  geom_pointrange(
+    aes(x = year, y = fit.fit, ymin = fit.lwr, ymax = fit.upr, group = country, color = block, legend = F), size = 0.5) +
+  geom_vline(xintercept=1989, linetype="dashed") +
+  annotate("text", x=1990, y=-1.5, label="Muren falder", size=2) + 
+  geom_vline(xintercept=1985, linetype="dotted") +
+  annotate("text", x=1986.6, y=-2.3, label= "Gorbachev får magten", size=2) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = .5, hjust=.5)) +
+  labs(title = "Wordfish analyse af generalforsamlingens taler, 1970-1991",
+       subtitle = "Plottet over blok, underblok og år.",
+       y = "Speech position",
+       x = "Year") +
+  scale_x_continuous("Year", labels = wfstemdata$year, breaks = wfstemdata$year)
+
+p
+
+ggsave("Billeder/Wordfish_stem_blocks.jpg",height=5,width=10)
+```
+
+```{r}
+textplot_scale1d(wf_stem, groups = wfstemdata$group)
+
+png(file="Billeder/Wordfish_stem_doc_theta.png",
+width=1000, height=5000, res=100)
+textplot_scale1d(wf_stem, groups = wfstemdata$group)
+dev.off()
+```
+
+```{r}
+textplot_scale1d(wf_stem, margin = "features", 
+                 highlighted = c("disarm", "soviet"))
+```
+
+```{r}
+png(file="Billeder/Wordfish_words.png",
+width=8000, height=12000, res=150)
+textplot_scale1d(wf_stem, margin = "features", 
+                 highlighted = c("disarm", "soviet"))
+dev.off()
+```
+
+# With all data stemmed
+```{r}
+p <- ggplot(wfstemall) +
+  geom_pointrange(
+    aes(x = year, y = fit.fit, ymin = fit.lwr, ymax = fit.upr, group = country, color = block,), size = 0.5) +
+  geom_line(aes(x = year, y = fit.fit, group = country, color = block)) +
+  geom_vline(xintercept=1989, linetype="dashed") +
+  annotate("text", x=1990, y=-1.5, label="Muren falder", size=2) + 
+  geom_vline(xintercept=1985, linetype="dotted") +
+  annotate("text", x=1983.5, y=-2.3, label= "Gorbachev får magten", size=2) + 
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = .5, hjust=.5)) +
+  labs(title = "Wordfish analysis",
+       y = "Speech position",
+       x = "Year") +
+  scale_x_continuous("Year", labels = wfstemall$year, breaks = wfstemall$year)
+
+p
+
+ggsave("Billeder/Wordfish_stem_all_blocks.jpg",height=10,width=15)
+```
+
